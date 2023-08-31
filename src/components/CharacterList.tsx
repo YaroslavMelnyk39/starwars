@@ -10,6 +10,7 @@ import ErrorMessage from './shared/ErrorMessage';
 
 const DEBOUNCE_VALUE = 500;
 const FIRST_PAGE = 1;
+const COUNT_PER_PAGE = 10;
 
 function CharacterList() {
   const [characters, setCharacters] = useState<ICharacter[]>([]);
@@ -23,33 +24,30 @@ function CharacterList() {
   const debouncedSearchTerm = useDebounce(searchTerm, DEBOUNCE_VALUE);
 
   const loadCharacters = useCallback(async (_page: number, _searchTerm: string) => {
-    let pageNumber = _page;
     setLoading(true);
     try {
-      let data = await fetchCharacters(pageNumber, _searchTerm);
-      if(!data.results) {
-        pageNumber = FIRST_PAGE;
-        setPage(pageNumber);
-        data = await fetchCharacters(pageNumber, _searchTerm);
-      }
-      if(pageNumber === FIRST_PAGE) {
-        const countPerPage = data.results.length;
-        setTotalPages(Math.ceil(data.count / countPerPage));
+      const data = await fetchCharacters(_page, _searchTerm);
+      if(COUNT_PER_PAGE === data.results.length || data.count <= COUNT_PER_PAGE) {
+        setTotalPages(Math.ceil(data.count / COUNT_PER_PAGE));
       }
       setError(null);
       setTotalItems(data.count);
       setCharacters(data?.results || []);
     } catch (err) {
-      console.log(err);
       setError("Failed to fetch characters. Please try again later.");
     } finally {
       setLoading(false);
     }
   }, []);
 
+  const updatePageData = useCallback((newPage: number) => {
+    setPage(newPage);
+    loadCharacters(newPage, debouncedSearchTerm);
+  }, [loadCharacters, debouncedSearchTerm]);
+
   useEffect(() => {
-    loadCharacters(page, debouncedSearchTerm);
-  }, [page, debouncedSearchTerm, loadCharacters]);
+    updatePageData(FIRST_PAGE);
+  }, [debouncedSearchTerm, updatePageData]);
 
   return (
     <div className="p-4">
@@ -69,7 +67,7 @@ function CharacterList() {
         <Spinner />
       ) : (
         <>
-          <p className="text-center mb-2">{`${totalItems} items found`}</p>
+          <p className="text-center mb-2">{`Items found: ${totalItems}`}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {characters.map((character) => (
               <Link 
@@ -85,11 +83,11 @@ function CharacterList() {
               </Link>
             ))}
           </div>
-          <Pagination 
+          {characters.length > 0 && (<Pagination 
             currentPage={page}
             totalPages={totalPages}
-            onPageChange={(newPage) => setPage(newPage)}
-          />
+            onPageChange={updatePageData}
+          />)}
         </>
       )}
     </div>
